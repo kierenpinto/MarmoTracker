@@ -13,6 +13,8 @@ face_detector = marmoface_detector()
 
 # Initialise Marmoset Detector
 marmoset_detector = YOLODetector()
+
+faceCache = []
 while True:
     # Get frame
     cam.update_frame()
@@ -20,6 +22,9 @@ while True:
     gray_image = cam.to_grey(color_image)
     # Run face detector
     detected_faces = face_detector.runCascade(gray_image)
+    faceCache = findOverPrev(faceCache,detected_faces,0.5)
+    print("faceCache {}".format(faceCache)) if debug else None
+    filBoxs = filteredBoxes(faceCache,3) #threshold number of frames for box to be in
     face_centres = list(map(boxToCentre,detected_faces)) if len(detected_faces)>0 else []
     print("faces {} centre {}".format(detected_faces, face_centres))
     # Run marmoset detector
