@@ -6,13 +6,19 @@ class depth_camera:
     # face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
     # eye_cascade = cv.CascadeClassifier('haarcascade_eye.xml')
     def __init__(self):
-        self.config = rs.config()
-        self.config.enable_stream(rs.stream.color,640,480,rs.format.bgr8,15)
-        self.config.enable_stream(rs.stream.depth,640,480,rs.format.y16,15)
+        # self.config = rs.config()
+        # self.config.enable_stream(rs.stream.color,640,480,rs.format.bgr8,15)
+        # self.config.enable_stream(rs.stream.depth,640,480,rs.format.y16,15)
         self.pipe = rs.pipeline()
     def start(self):
         ''' Starts the camera '''
         self.pipe.start()
+
+    def getIntrinsics(self):
+        profile = self.pipe.get_active_profile()
+        depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
+        # print(depth_profile.get_intrinsics())
+        return depth_profile.get_intrinsics()
 
     def update_frame(self):
         ''' Gets the next frame '''
@@ -42,15 +48,42 @@ class depth_camera:
         average = np.average(face_rectangle)
         return average/1000
 
+    @staticmethod
     def getCentre(x,y,w,h):
         ''' input edges of rectangele '''
         x1,y1,x2,y2 = x,y,x+w,y-h
         return int(np.average([x1,x2]).round()),int(np.average([y1,y2]).round())
 
-    def deproject_depth(self,depth_frame,x,y):
+    @staticmethod
+    def deproject_depth(depth_frame,x,y):
         depth = depth_frame.get_distance(x,y)
         x,y,z = rs.rs2_deproject_pixel_to_point(depth_stream_intrinsics,pixel,depth)
+        rs.rs2_d
         return x,y,z
+
+    def deproject(self,pixel,depth_image=None):
+        if depth_image is None:
+            depth_image = self.get_depth()
+        intrinsics = self.getIntrinsics()
+        pixel = np.array(pixel)
+        if pixel.shape[0] == 0:
+            return None
+        if(len(pixel.shape)==1):
+            px,py = pixel
+
+        if(len(pixel.shape)==2):
+            px = pixel[:,0]
+            py = pixel[:,1]
+
+        z = depth_image[py,px]/1000
+        x = z*(px- intrinsics.ppx)/ intrinsics.fx
+        y = z*(py- intrinsics.ppy)/ intrinsics.fy
+        # z = z/1000
+        stack = np.vstack((x,y,z)).T
+        return stack
+
+        
+        
 
     def stop(self):
         self.pipe.stop()

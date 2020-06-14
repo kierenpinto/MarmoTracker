@@ -2,6 +2,8 @@
 import numpy as np
 import time
 import cv2
+from typing import NewType
+
 '''
 Refer to https://www.pyimagesearch.com/2018/11/12/yolo-object-detection-with-opencv/
 https://github.com/opencv/opencv/blob/master/samples/dnn/object_detection.py
@@ -23,6 +25,7 @@ class YOLODetector:
         ln = net.getLayerNames()
         output_layers = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
         self.output_layers = output_layers
+        # self.camera = cam
 
     def predict(self,image):
         (H, W) = image.shape[:2]
@@ -65,6 +68,7 @@ class YOLODetector:
         
         idxs = cv2.dnn.NMSBoxes(boxes, confidences, 0.1, 0.1)
         return idxs,boxes,confidences,box_centres
+    
     def predict_nms(self,image):
         idxs,boxes,confidences,box_centres = self.predict(image)
         nms_boxes = []
@@ -77,11 +81,23 @@ class YOLODetector:
                 nms_box_centres.append(box_centres[i])
         return nms_boxes, nms_confidences, nms_box_centres
 
-    def draw_boxes(self,color_image_ptr,detected_marmosets):
-        for (x,y,w,h) in detected_marmosets:
+    @staticmethod
+    def draw_boxes(color_image_ptr,detected_marmosets,label=[]):
+        for i,(x,y,w,h) in enumerate(detected_marmosets):
             cv2.rectangle(color_image_ptr,(x,y),(x+w,y+h),(0,255,0),2)
+            cv2.putText(color_image_ptr, "Marmoset #{}".format(label[i]),(x,y-10), cv2.FONT_HERSHEY_SIMPLEX,0.9,(0,255,0)) if i < len(label) else None
+    
+    @staticmethod
+    def draw_centre(color_image_ptr,detected_marmosets_centres,deprojection=None):
+        for i, (x,y) in enumerate(detected_marmosets_centres):
+            cv2.circle(color_image_ptr,(x,y),radius=2,color=(0, 0, 255), thickness=-1)
+            points = deprojection[i]
+            cv2.putText(color_image_ptr, "{:.2f},{:.2f},{:.2f}".format(*points),(x,y-10), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0))
+            # cv2.putText(color_image_ptr, "{}".format(points[2]),(x,y-10), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0))
 
-    def draw_boxes_nms(self,image,idxs,boxes,confidences):
+
+    @staticmethod
+    def draw_boxes_nms(image,idxs,boxes,confidences):
         if len(idxs) >0 :
             for i in idxs.flatten():
                 (x, y) = (boxes[i][0], boxes[i][1])
@@ -89,3 +105,47 @@ class YOLODetector:
                 color = (255, 0, 0)
                 print(x,y,w,h,confidences[i])
                 cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+    def detect(self,color_image):
+        nms = self.predict_nms(color_image)
+        # pixel = nms[2] #box centre
+        # xyz = self.camera.deproject(pixel,depth_image)
+        return MarmosetBoxes(nms)
+
+class MarmosetBoxes:
+    '''Stores Faces For an Image'''
+    def __init__(self,nms_in,debug = False):
+        ''' Input a gray Image '''
+        self.nms_in = nms_in
+        self.debug = debug
+        # self.xyz_coordinate = xyz_coord
+    
+    @property
+    def centres(self): 
+        return self.nms_in[2]
+
+    @property
+    def boxes(self):
+        ''' boxes in xywh form '''
+        return self.nms_in[0]
+
+    @property
+    def confidences(self):
+        ''' confidence of the boxes '''
+        return self.nms_in[1]
+
+    @property
+    def no_boxes(self):
+        ''' number of boxes '''
+        return len(self.nms_in[1])
+
+    @property
+    def coordinates(self):
+        ''' gets the x,y,z coordinates of the marmoset'''
+        return self.xyz_coordinate
+
+    # def draw_boxes(self,color_image):
+    #     ''' Input image to draw boxes on '''
+    #     YOLODetector.draw_boxes(color_image,self.boxes)
+    #     return self
+
+MarmosetBoxesType = NewType("MarmosetBoxes",MarmosetBoxes)
